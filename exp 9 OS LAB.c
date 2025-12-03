@@ -1,24 +1,42 @@
+#include <windows.h>
 #include <stdio.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/wait.h>  // ADD THIS
-#include <unistd.h>
 #include <string.h>
 
-int main(){
-    key_t k=IPC_PRIVATE;
-    int id=shmget(k,1024,0666|IPC_CREAT);
-    char *p=(char*)shmat(id,NULL,0);
-    pid_t pid=fork();
-    if(pid==0){
-        sleep(1);
-        printf("child read: %s\n",p);
-        shmdt(p);
-    } else {
-        strcpy(p,"hello from parent");
-        wait(NULL);
-        shmdt(p);
-        shmctl(id,IPC_RMID,NULL);
+int main() {
+    const char *name = "MySharedMemory";
+
+    HANDLE hMap = CreateFileMapping(
+        INVALID_HANDLE_VALUE,    // use RAM, not a real file
+        NULL,
+        PAGE_READWRITE,
+        0,
+        1024,
+        name
+    );
+
+    if (hMap == NULL) {
+        printf("CreateFileMapping error: %ld\n", GetLastError());
+        return 1;
     }
+
+    char *p = (char*) MapViewOfFile(hMap, FILE_MAP_WRITE, 0, 0, 0);
+    if (p == NULL) {
+        printf("MapViewOfFile error: %ld\n", GetLastError());
+        CloseHandle(hMap);
+        return 1;
+    }
+
+    // Write message to shared memory
+    strcpy(p, "hello from parent");
+
+    printf("Parent wrote data.\n");
+
+    // Launch child.exe
+    system("child.exe");
+
+    // Cleanup
+    UnmapViewOfFile(p);
+    CloseHandle(hMap);
+
     return 0;
 }
